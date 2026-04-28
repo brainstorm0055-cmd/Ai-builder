@@ -1,8 +1,14 @@
 import express from "express";
-import cors from "cors";
 import mongoose from "mongoose";
-import dotenv from "dotenv";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
+import cors from "cors";
 import axios from "axios";
+import dotenv from "dotenv";
+
+import { analisarPrompt } from "./ai/analisador.js";
+import { criarPlano } from "./ai/planejador.js";
+import { buscarContexto } from "./ai/memoria.js";
 
 dotenv.config();
 
@@ -12,14 +18,53 @@ app.use(cors());
 
 mongoose.connect(process.env.MONGO_URL);
 
-// MODELO
-const Projeto = mongoose.model("Projeto", {
-  prompt: String,
-  html: String
+// MODELOS
+const User = mongoose.model("User", {
+  email: String,
+  password: String
 });
 
-// ROTA IA
-app.post("/gerar", async (req, res) => {
+// AUTH
+function auth(req, res, next) {
+  try {
+    req.user = jwt.verify(req.headers.authorization, process.env.JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ erro: "Não autorizado" });
+  }
+}
+
+// REGISTER
+app.post("/register", async (req, res) => {
+  const hash = await bcrypt.hash(req.body.password, 10);
+  const user = await User.create({
+    email: req.body.email,
+    password: hash
+  });
+  res.json(user);
+});
+
+// LOGIN
+app.post("/login", async (req, res) => {
+  const user = await User.findOne({ email: req.body.email });
+
+  if (!user) return res.json({ erro: "Usuário não encontrado" });
+
+  const ok = await bcrypt.compare(req.body.password, user.password);
+  if (!ok) return res.json({ erro: "Senha inválida" });
+
+  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+  res.json({ token });
+});
+
+// IA INTELIGENTE
+app.post("/gerar", auth, async (req, res) => {
+
+  const prompt = req.body.prompt;
+
+  const analise = analisarPrompt(prompt);
+  const plano = criarPlano(analise);
+  const contexto = buscarContexto();
 
   const resposta = await axios.post(
     "https://api.openai.com/v1/chat/completions",
@@ -28,12 +73,21 @@ app.post("/gerar", async (req, res) => {
       messages: [
         {
           role: "system",
-          content: "Crie um site moderno em HTML completo"
+          content: `
+Você é uma IA profissional.
+
+PLANO:
+${plano}
+
+REFERÊNCIA:
+${contexto}
+
+Crie um site completo, moderno e bonito.
+
+Retorne apenas HTML completo.
+`
         },
-        {
-          role: "user",
-          content: req.body.prompt
-        }
+        { role: "user", content: prompt }
       ]
     },
     {
@@ -45,12 +99,8 @@ app.post("/gerar", async (req, res) => {
 
   const html = resposta.data.choices[0].message.content;
 
-  await Projeto.create({
-    prompt: req.body.prompt,
-    html
-  });
-
   res.json({ html });
 });
 
-app.listen(3000, () => console.log("Rodando..."));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Servidor rodando"));
