@@ -1,2 +1,9 @@
-# Ai-builder
-Seu Novo Conceito em criação de sites
+# AI Builder
+
+Sistema de IA que cria sites automaticamente
+
+## Rodar local
+
+cd backend
+npm install
+npm start
