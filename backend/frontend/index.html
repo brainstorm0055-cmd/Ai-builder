@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h2>IA Builder Online</h2>
+
+<input id="email" placeholder="email"><br>
+<input id="senha" type="password"><br>
+<button onclick="login()">Login</button>
+
+<hr>
+
+<textarea id="prompt" rows="4" cols="50"></textarea><br>
+<button onclick="gerar()">Gerar Site</button>
+
+<iframe id="preview" width="100%" height="400"></iframe>
+
+<script>
+let token = "";
+
+// 🔥 COLOQUE AQUI SEU BACKEND
+const API = "https://SEU-BACKEND.up.railway.app";
+
+async function login() {
+  const res = await fetch(API + "/login", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      email: email.value,
+      password: senha.value
+    })
+  });
+
+  const data = await res.json();
+  token = data.token;
+}
+
+async function gerar() {
+  const res = await fetch(API + "/gerar", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization": token
+    },
+    body: JSON.stringify({ prompt: prompt.value })
+  });
+
+  const data = await res.json();
+
+  const blob = new Blob([data.html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+
+  preview.src = url;
+}
+</script>
+
+</body>
+</html>
